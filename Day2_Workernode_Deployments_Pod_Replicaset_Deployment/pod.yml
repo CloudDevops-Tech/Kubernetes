@@ -1,0 +1,24 @@
+# Kubernetes API version being used
+apiVersion: v1
+# Type of Kubernetes resource - Pod is the smallest deployable unit
+kind: Pod
+# Metadata section contains information about the Pod
+metadata:
+  # Name of the Pod
+  name: nginx-pod
+  # Labels are key-value pairs used for organizing and selecting Pods
+  labels:
+    # Label indicating this Pod runs an nginx application
+    app: nginx
+# Specification section defines the desired state of the Pod
+spec:
+  # List of containers that will run inside this Pod
+  containers: 
+  # First container definition
+  - name: nginx-container
+    # Docker image to use for this container
+    image: nginx:latest
+    # Ports exposed by this container
+    ports:
+      # Container listens on port 80
+      - containerPort: 80
