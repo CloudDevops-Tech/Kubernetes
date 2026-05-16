@@ -1,59 +1,82 @@
-# ð Cluster Autoscaler Setup on Amazon EKS
+# Cluster Autoscaler Setup on Amazon EKS
 
-This guide walks you through installing and configuring the **Cluster Autoscaler** on an Amazon EKS cluster using the AWS cloud provider.
+This guide explains how to install and configure Cluster Autoscaler on an Amazon EKS cluster using the AWS cloud provider.
 
 ---
 
-## 1ï¸â£ Deploy Cluster Autoscaler
+# 1. Deploy Cluster Autoscaler
 
-Apply the official Cluster Autoscaler manifest for your Kubernetes version (adjust `1.29.0` if needed):
+Apply the official Cluster Autoscaler manifest for your Kubernetes version.
 
-```sh
+```bash
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/cluster-autoscaler-1.29.0/cluster-autoscaler/cloudprovider/aws/examples/cluster-autoscaler-autodiscover.yaml
-2ï¸â£ Verify the Pod
-Check that the autoscaler pod is running in the kube-system namespace:
+```
 
+---
 
+# 2. Verify the Pod
+
+Check whether the Cluster Autoscaler pod is running in the `kube-system` namespace.
+
+```bash
 kubectl -n kube-system get pods -l app=cluster-autoscaler
+```
+
 Expected output:
 
-
-NAME                                  READY   STATUS    RESTARTS   AGE
+```bash
+NAME                                   READY   STATUS    RESTARTS   AGE
 cluster-autoscaler-6889f6cf54-7pcsh   1/1     Running   0          2m
-3ï¸â£ Edit Deployment (Add Cluster Name)
-Edit the deployment to configure your cluster name:
+```
 
+---
 
+# 3. Edit Deployment and Add Cluster Name
+
+Edit the Cluster Autoscaler deployment.
+
+```bash
 kubectl -n kube-system edit deployment.apps/cluster-autoscaler
-Inside the manifest, find the container args section and update:
+```
 
-yaml
-Copy code
+Inside the deployment manifest, locate the container arguments section and update the cluster name.
+
+```yaml
 containers:
   - name: cluster-autoscaler
-    - command:
-        - ./cluster-autoscaler
-        - --v=4
-        - --stderrthreshold=info
-        - --cloud-provider=aws
-        - --skip-nodes-with-local-storage=false
-        - --expander=least-waste
-        - --node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/naresh ###chnage the cluster name in place of naresh my cluster name is naresh
-        image: registry.k8s.io/autoscaling/cluster-autoscaler:v1.26.2
-        imagePullPolicy: Always
-        name: cluster-autoscaler
-Save & exit.
+    command:
+      - ./cluster-autoscaler
+      - --v=4
+      - --stderrthreshold=info
+      - --cloud-provider=aws
+      - --skip-nodes-with-local-storage=false
+      - --expander=least-waste
+      - --node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/naresh
+    image: registry.k8s.io/autoscaling/cluster-autoscaler:v1.26.2
+    imagePullPolicy: Always
+```
 
-4ï¸â£ Configure IAM Permissions
-Cluster Autoscaler requires IAM permissions to scale nodes.
-Go to your EKS Node Group IAM Role and attach the following policy.
+Replace `naresh` with your EKS cluster name if different.
 
-ð Either attach AmazonEKSClusterAutoscalerPolicy (AWS Managed)
-or create a custom IAM policy with the JSON below.
+Save and exit the editor.
 
-Example IAM Policy JSON
+---
 
+# 4. Configure IAM Permissions
 
+Cluster Autoscaler requires IAM permissions to scale worker nodes.
+
+Attach either:
+
+* `AmazonEKSClusterAutoscalerPolicy` (AWS managed policy)
+
+OR
+
+* A custom IAM policy using the JSON below.
+
+Example IAM policy:
+
+```json
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -72,45 +95,99 @@ Example IAM Policy JSON
     }
   ]
 }
-Attach this to your Node Group Role.
+```
 
-5ï¸â£ Update Node Group Scaling Config
-Set your min/max/desired node counts for the autoscaler:
+Attach this policy to your EKS Node Group IAM Role.
 
+---
+
+# 5. Update Node Group Scaling Configuration
+
+Configure the minimum, maximum, and desired node counts.
+
+```bash
 aws eks update-nodegroup-config \
   --cluster-name naresh \
   --nodegroup-name ng-af5ac006 \
   --scaling-config minSize=2,maxSize=6,desiredSize=3
-6ï¸â£ Check Autoscaler Logs
-Watch the logs to confirm the autoscaler is working:
+```
 
+Explanation:
 
+* `minSize=2` → Minimum number of nodes always running
+* `maxSize=6` → Maximum nodes autoscaler can create
+* `desiredSize=3` → Initial desired node count
+
+---
+
+# 6. Check Cluster Autoscaler Logs
+
+View the autoscaler logs to confirm it is working correctly.
+
+```bash
 kubectl -n kube-system logs -f deployment/cluster-autoscaler
-Look for lines like:
+```
 
+Example scale-up logs:
 
+```bash
 I0828 17:36:38.403432       1 scale_up.go:422] Pod default/nginx-deployment-12345 is unschedulable ...
 I0828 17:36:38.403451       1 scale_up.go:423] Scale-up triggered ...
-â Validation
-Deploy a test workload with more pods than your current node capacity:
+```
 
+Explanation:
 
+* Pod could not be scheduled because resources were insufficient
+* Cluster Autoscaler triggered a scale-up event
+* A new worker node will be added automatically
+
+Example scale-down logs:
+
+```bash
+I0516 13:16:01.132868       1 static_autoscaler.go:541] Calculating unneeded nodes
+I0516 13:16:01.132902       1 eligibility.go:144] Node is not suitable for removal - cpu utilization too big
+I0516 13:16:01.132995       1 static_autoscaler.go:598] Starting scale down
+I0516 13:16:01.133013       1 legacy.go:298] No candidates for scale down
+```
+
+Explanation:
+
+* Autoscaler checked nodes for removal
+* Nodes were heavily utilized
+* No nodes qualified for scale down
+
+---
+
+# 7. Validate Cluster Autoscaler
+
+Create a workload with many replicas to trigger autoscaling.
+
+```bash
 kubectl create deployment nginx --image=nginx --replicas=50
-Check if new nodes are being added:
+```
 
+Watch for new nodes being added.
 
+```bash
 kubectl get nodes -w
-Scale down pods and watch nodes reduce (if below maxSize and above minSize):
+```
 
+Scale down the deployment.
 
+```bash
 kubectl scale deployment nginx --replicas=1
-ð Notes
-minSize ensures at least 2 nodes are always running.
+```
 
-maxSize sets the upper scaling limit.
+Observe whether unused nodes are removed automatically.
 
-desiredSize is the starting point but will be adjusted dynamically.
+---
 
-Ensure your Node Group IAM Role has autoscaling permissions, otherwise the pod will stay in Pending or fail to scale.
+# 8. Important Notes
 
-Only one Cluster Autoscaler pod should be running per cluster (it uses leader election).
+* Only one Cluster Autoscaler pod should run per cluster
+* Cluster Autoscaler uses leader election internally
+* Ensure Node Group IAM Role has autoscaling permissions
+* Incorrect IAM permissions can prevent scaling operations
+* Pods may remain in `Pending` state if scaling fails
+* Scale down happens only when utilization is low
+* Scale up occurs when pods become unschedulable
