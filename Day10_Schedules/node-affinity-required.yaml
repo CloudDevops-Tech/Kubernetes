@@ -1,4 +1,3 @@
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,21 +5,22 @@ metadata:
   labels:
     app: webapp
     type: front-end
+
 spec:
-  replicas: 3  # Number of pod replicas
+  replicas: 3
+
   selector:
     matchLabels:
       app: webapp
       type: front-end
+
   template:
     metadata:
       labels:
         app: webapp
         type: front-end
+
     spec:
-      containers:
-        - name: nginx
-          image: nginx:latest
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -31,3 +31,7 @@ spec:
                     values:
                       - white
                       - green
+
+      containers:
+        - name: nginx
+          image: nginx:latest
