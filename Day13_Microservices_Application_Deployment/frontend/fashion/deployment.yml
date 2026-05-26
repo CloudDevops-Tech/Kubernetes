@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fashion-deployment
+  labels:
+    app: fashion
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fashion
+  template:
+    metadata:
+      labels:
+        app: fashion
+    spec:
+      containers:
+      - name: fashion
+        image: 904557616759.dkr.ecr.us-east-1.amazonaws.com/shopping-site-fashion:cbd435faf85ccf163f94ceff70cb7364b7605c08
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fashion-service
+  labels:
+    app: fashion
+spec:
+  type: ClusterIP
+  selector:
+    app: fashion
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
